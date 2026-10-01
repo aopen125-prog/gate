@@ -651,21 +651,19 @@ def build_clash_yaml(sub_text):
     lines = [l.strip() for l in sub_text.splitlines() if l.strip().startswith("vless://")]
     proxies = []
     names = []
-    edge_pool = EDGE_HOSTS or [f"{EDT_DOMAIN}:443"]
-    for idx, line in enumerate(lines):
+    for line in lines:
         try:
             m = line[8:]
             auth_host, rest = m.split("?", 1) if "?" in m else (m, "")
             params_str, name_str = rest.split("#", 1) if "#" in rest else (rest, "")
             uuid_val, host_port = auth_host.split("@")
-            entry = edge_pool[idx % len(edge_pool)]
-            srv, prt = entry.split(":") if ":" in entry else (entry, "443")
+            srv, prt = host_port.split(":")
             name = urllib.parse.unquote(name_str)
             params = dict(urllib.parse.parse_qsl(params_str))
             path_val = urllib.parse.unquote(params.get("path", "/"))
-            sni_val = params.get("sni", EDT_DOMAIN)
+            sni_val = params.get("sni", srv)
             fp_val = params.get("fp", "chrome")
-            host_val = params.get("host", EDT_DOMAIN)
+            host_val = params.get("host", srv)
             names.append(name)
             p_str = (
                 "  - name: " + json.dumps(name, ensure_ascii=False) + "\n"
