@@ -636,94 +636,63 @@ def write_outputs(data):
     sub_path = os.path.join(PUBLIC_DIR, "sub.txt")
     with open(sub_path, "w", encoding="utf-8") as f:
         f.write(build_sub_text(data))
-
-    # 自动生成 Clash 专用原生 YAML 订阅
-    clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
-    vless_lines = [l.strip() for l in build_sub_text(data).splitlines() if l.strip().startswith("vless://")]
-    c_proxies = []
-    for line in vless_lines:
-        m = line[8:]
-        auth_host, rest = m.split("?", 1) if "?" in m else (m, "")
-        params_str, name_str = rest.split("#", 1) if "#" in rest else (rest, "")
-        uuid_val, host_port = auth_host.split("@")
-        srv, prt = host_port.split(":")
-        name = urllib.parse.unquote(name_str)
-        params = dict(urllib.parse.parse_qsl(params_str))
-        p_obj = (
-            f"  - name: "{name}"
-"
-            f"    type: vless
-"
-            f"    server: {srv}
-"
-            f"    port: {prt}
-"
-            f"    uuid: {uuid_val}
-"
-            f"    network: ws
-"
-            f"    tls: true
-"
-            f"    udp: true
-"
-            f"    sni: {params.get('sni', srv)}
-"
-            f"    client-fingerprint: {params.get('fp', 'chrome')}
-"
-            f"    ws-opts:
-"
-            f"      path: "{urllib.parse.unquote(params.get('path', '/'))}"
-"
-            f"      headers:
-"
-            f"        Host: {params.get('host', srv)}
-"
-        )
-        c_proxies.append(p_obj)
-    names_yaml = "
-".join([f"      - "{urllib.parse.unquote(l.split('#')[1])}"" for l in vless_lines if "#" in l])
-    clash_content = (
-        "port: 7890
-socks-port: 7891
-allow-lan: false
-mode: rule
-log-level: info
-
-"
-        "proxies:
-" + "".join(c_proxies) + "
-"
-        "proxy-groups:
-"
-        "  - name: PROXY
-    type: select
-    proxies:
-      - AUTO
-" + names_yaml + "
-"
-        "  - name: AUTO
-    type: url-test
-    url: http://www.gstatic.com/generate_204
-    interval: 300
-    proxies:
-" + names_yaml + "
-
-"
-        "rules:
-  - GEOIP,LAN,DIRECT
-  - GEOIP,CN,DIRECT
-  - MATCH,PROXY
-"
-    )
+        clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
     with open(clash_path, "w", encoding="utf-8") as f:
-        f.write(clash_content)
-
-    return data_path, html_path, chains_path, hosts_path, sub_path
+        f.write(build_clash_yaml(build_sub_text(data)))
+    return data_path, html_path, chains_path, hosts_path, sub_path, clash_path
 
 
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
+
+def build_clash_yaml(sub_text):
+    lines = [l.strip() for l in sub_text.splitlines() if l.strip().startswith("vless://")]
+    proxies = []
+    names = []
+    for line in lines:
+        try:
+            m = line[8:]
+            auth_host, rest = m.split("?", 1) if "?" in m else (m, "")
+            params_str, name_str = rest.split("#", 1) if "#" in rest else (rest, "")
+            uuid_val, host_port = auth_host.split("@")
+            srv, prt = host_port.split(":")
+            name = urllib.parse.unquote(name_str)
+            params = dict(urllib.parse.parse_qsl(params_str))
+            path_val = urllib.parse.unquote(params.get("path", "/"))
+            sni_val = params.get("sni", srv)
+            fp_val = params.get("fp", "chrome")
+            host_val = params.get("host", srv)
+            names.append(name)
+            p_str = (
+                "  - name: " + json.dumps(name, ensure_ascii=False) + "\n"
+                "    type: vless\n"
+                "    server: " + srv + "\n"
+                "    port: " + prt + "\n"
+                "    uuid: " + uuid_val + "\n"
+                "    network: ws\n"
+                "    tls: true\n"
+                "    udp: true\n"
+                "    sni: " + sni_val + "\n"
+                "    client-fingerprint: " + fp_val + "\n"
+                "    ws-opts:\n"
+                "      path: " + json.dumps(path_val) + "\n"
+                "      headers:\n"
+                "        Host: " + host_val + "\n"
+            )
+            proxies.append(p_str)
+        except Exception:
+            continue
+    p_names = "\n".join("      - " + json.dumps(n, ensure_ascii=False) for n in names)
+    return (
+        "port: 7890\nsocks-port: 7891\nallow-lan: false\nmode: rule\nlog-level: info\n\n"
+        "proxies:\n" + "".join(proxies) + "\n"
+        "proxy-groups:\n"
+        "  - name: PROXY\n    type: select\n    proxies:\n      - AUTO\n" + p_names + "\n"
+        "  - name: AUTO\n    type: url-test\n    url: http://www.gstatic.com/generate_204\n    interval: 300\n    proxies:\n" + p_names + "\n\n"
+        "rules:\n  - GEOIP,LAN,DIRECT\n  - GEOIP,CN,DIRECT\n  - MATCH,PROXY\n"
+    )
+
 def main():
     session = requests.Session()
 
