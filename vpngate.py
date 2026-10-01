@@ -28,6 +28,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import urllib.parse
 from urllib.parse import quote
 
 import requests
@@ -639,7 +640,7 @@ def write_outputs(data):
         clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
     with open(clash_path, "w", encoding="utf-8") as f:
         f.write(build_clash_yaml(build_sub_text(data)))
-    return data_path, html_path, chains_path, hosts_path, sub_path, clash_path
+    return data_path, html_path, chains_path, hosts_path, sub_path
 
 
 # ---------------------------------------------------------------------------
