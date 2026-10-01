@@ -636,6 +636,88 @@ def write_outputs(data):
     sub_path = os.path.join(PUBLIC_DIR, "sub.txt")
     with open(sub_path, "w", encoding="utf-8") as f:
         f.write(build_sub_text(data))
+
+    # 自动生成 Clash 专用原生 YAML 订阅
+    clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
+    vless_lines = [l.strip() for l in build_sub_text(data).splitlines() if l.strip().startswith("vless://")]
+    c_proxies = []
+    for line in vless_lines:
+        m = line[8:]
+        auth_host, rest = m.split("?", 1) if "?" in m else (m, "")
+        params_str, name_str = rest.split("#", 1) if "#" in rest else (rest, "")
+        uuid_val, host_port = auth_host.split("@")
+        srv, prt = host_port.split(":")
+        name = urllib.parse.unquote(name_str)
+        params = dict(urllib.parse.parse_qsl(params_str))
+        p_obj = (
+            f"  - name: "{name}"
+"
+            f"    type: vless
+"
+            f"    server: {srv}
+"
+            f"    port: {prt}
+"
+            f"    uuid: {uuid_val}
+"
+            f"    network: ws
+"
+            f"    tls: true
+"
+            f"    udp: true
+"
+            f"    sni: {params.get('sni', srv)}
+"
+            f"    client-fingerprint: {params.get('fp', 'chrome')}
+"
+            f"    ws-opts:
+"
+            f"      path: "{urllib.parse.unquote(params.get('path', '/'))}"
+"
+            f"      headers:
+"
+            f"        Host: {params.get('host', srv)}
+"
+        )
+        c_proxies.append(p_obj)
+    names_yaml = "
+".join([f"      - "{urllib.parse.unquote(l.split('#')[1])}"" for l in vless_lines if "#" in l])
+    clash_content = (
+        "port: 7890
+socks-port: 7891
+allow-lan: false
+mode: rule
+log-level: info
+
+"
+        "proxies:
+" + "".join(c_proxies) + "
+"
+        "proxy-groups:
+"
+        "  - name: PROXY
+    type: select
+    proxies:
+      - AUTO
+" + names_yaml + "
+"
+        "  - name: AUTO
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    proxies:
+" + names_yaml + "
+
+"
+        "rules:
+  - GEOIP,LAN,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY
+"
+    )
+    with open(clash_path, "w", encoding="utf-8") as f:
+        f.write(clash_content)
+
     return data_path, html_path, chains_path, hosts_path, sub_path
 
 
