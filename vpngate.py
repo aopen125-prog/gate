@@ -523,8 +523,8 @@ def build_hosts_text(data):
 
 
 # edgetunnel 完整订阅 (vless://) 配置
-EDT_UUID = os.environ.get("EDT_UUID", "a664b457-d1aa-4671-bcdd-ad2eb31414ec")
-EDT_DOMAIN = os.environ.get("EDT_DOMAIN", "xi.xiaohe.gv.uy")
+EDT_UUID = os.environ.get("EDT_UUID", "5c5bf908-8811-4b7f-8319-4ed6780e66e4")
+EDT_DOMAIN = os.environ.get("EDT_DOMAIN", "hello.aopen125.workers.dev")
 EDT_FINGERPRINT = os.environ.get("EDT_FINGERPRINT", "chrome")
 SUB_URL = os.environ.get("SUB_URL", "https://jerylihub.github.io/gate/sub.txt")
 
@@ -637,7 +637,7 @@ def write_outputs(data):
     sub_path = os.path.join(PUBLIC_DIR, "sub.txt")
     with open(sub_path, "w", encoding="utf-8") as f:
         f.write(build_sub_text(data))
-        clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
+    clash_path = os.path.join(PUBLIC_DIR, "clash.yaml")
     with open(clash_path, "w", encoding="utf-8") as f:
         f.write(build_clash_yaml(build_sub_text(data)))
     return data_path, html_path, chains_path, hosts_path, sub_path
@@ -651,19 +651,21 @@ def build_clash_yaml(sub_text):
     lines = [l.strip() for l in sub_text.splitlines() if l.strip().startswith("vless://")]
     proxies = []
     names = []
-    for line in lines:
+    edge_pool = EDGE_HOSTS or [f"{EDT_DOMAIN}:443"]
+    for idx, line in enumerate(lines):
         try:
             m = line[8:]
             auth_host, rest = m.split("?", 1) if "?" in m else (m, "")
             params_str, name_str = rest.split("#", 1) if "#" in rest else (rest, "")
             uuid_val, host_port = auth_host.split("@")
-            srv, prt = host_port.split(":")
+            entry = edge_pool[idx % len(edge_pool)]
+            srv, prt = entry.split(":") if ":" in entry else (entry, "443")
             name = urllib.parse.unquote(name_str)
             params = dict(urllib.parse.parse_qsl(params_str))
             path_val = urllib.parse.unquote(params.get("path", "/"))
-            sni_val = params.get("sni", srv)
+            sni_val = params.get("sni", EDT_DOMAIN)
             fp_val = params.get("fp", "chrome")
-            host_val = params.get("host", srv)
+            host_val = params.get("host", EDT_DOMAIN)
             names.append(name)
             p_str = (
                 "  - name: " + json.dumps(name, ensure_ascii=False) + "\n"
